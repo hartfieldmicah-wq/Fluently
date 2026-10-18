@@ -331,6 +331,17 @@ body.speaking .ctl.big{animation:ping 1.1s infinite}
 .langrow .b span{font-size:13px;color:var(--muted)}
 .langrow.on{background:var(--blue-soft)}
 .langrow.on > svg{color:var(--blue-2)}
+.langrow .b b .lb{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;margin-left:7px;vertical-align:-5px;background:var(--blue-soft);color:var(--blue-2);cursor:pointer}
+.langrow .b b .lb.g{background:rgba(168,85,247,.16);color:#a855f7}
+.langrow .b b .lb:active{transform:scale(.9)}
+.spanel #binfo{position:sticky;top:-2px;z-index:5;background:var(--card);padding:2px 0 1px}
+.binfo{margin:0 0 12px;padding:11px 13px;border-radius:14px;background:var(--card-2);font-size:13px;line-height:1.45;color:var(--muted)}
+.binfo .bi{display:flex;align-items:flex-start;gap:9px;margin-top:6px}
+.binfo .bi:first-child{margin-top:0}
+.binfo .lb{display:inline-grid;place-items:center;flex-shrink:0;width:22px;height:22px;border-radius:7px;background:var(--blue-soft);color:var(--blue-2)}
+.binfo .lb.g{background:rgba(168,85,247,.16);color:#a855f7}
+.binfo b{color:var(--text)}
+.binfo .no{opacity:.75}
 .fam{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:14px 12px 4px}
 .langline{display:flex;align-items:center;gap:6px}
 .langline .langrow{flex:1;min-width:0}
@@ -398,6 +409,21 @@ body.nodock .dock{display:none}
 .tone-blue{--t:59,130,246;--t1:#8ec5ff;--t2:#3b82f6}
 .tone-green{--t:16,201,137;--t1:#6ef0b4;--t2:#10c98a}
 .tone-red{--t:255,77,109;--t1:#ff9aa8;--t2:#ff4d6d}
+.tone-purple{--t:168,85,247;--t1:#d8b4fe;--t2:#a855f7}
+.grl{align-items:flex-start}
+.grl .b span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.grl .sq{width:40px;height:40px;border-radius:12px;font-weight:800;font-size:14px}
+.gsum{margin:0 0 14px;padding:12px 14px;border-radius:14px;background:var(--blue-soft);color:var(--text);font-weight:700;font-size:15px;line-height:1.4}
+.gbody p{margin:0 0 12px;font-size:15px;line-height:1.55}
+.gbody ul{margin:0 0 12px;padding-left:20px} .gbody li{margin:0 0 6px;font-size:15px;line-height:1.5}
+.gbody b{font-weight:800}
+.gbody .tw{overflow-x:auto;margin:0 0 14px;border-radius:12px;border:1px solid var(--line)}
+.gbody table{border-collapse:collapse;width:100%;font-size:14px}
+.gbody th,.gbody td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.gbody th{background:var(--card-2);font-weight:800;font-size:12px;letter-spacing:.03em}
+.gbody tr:last-child td{border-bottom:0}
+.gnav{display:flex;gap:10px;margin-top:12px}
+.gnav .btn{flex:1}
 .tone-yellow{--t:255,184,28;--t1:#ffe07a;--t2:#ffb81c}
 @media (min-width:700px){.screen{padding-left:24px;padding-right:24px}.explore{grid-template-columns:repeat(4,1fr)}.ex.wide{grid-column:span 2}}
 @media (hover:hover){.lrow:hover,.ex:hover,.part:hover{border-color:rgba(59,130,246,.45)}}
@@ -525,11 +551,19 @@ function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor
    @slang
    LEVEL|sentence|en|es|fr|de|pt   (slang has its own glosses) */
 function parseLang(raw, code){
-  const out=[], seen=new Set(); let slang=false;
+  const out=[], seen=new Set(); let slang=false, gram=false; out.grammar=[];
   raw.split('\n').forEach(line=>{
     line=line.trim(); if(!line || line[0]==='#') return;
-    if(line==='@slang'){ slang=true; return }
+    if(line==='@slang'){ slang=true; gram=false; return }
+    if(line==='@grammar'){ gram=true; slang=false; return }
     const f=line.split('|');
+    if(gram){
+      /* LEVEL|cat|Title|n1,n2,...|Summary|Body[|xx:Title\u00a4Summary\u00a4Body ...] */
+      if(f.length<6 || !LV.hasOwnProperty(f[0])) return;
+      const tr={}; f.slice(6).forEach(x=>{ const i=x.indexOf(':'); if(i>0){ const q=x.slice(i+1).split('\u00a4'); if(q.length===3) tr[x.slice(0,i)]={title:q[0],sum:q[1],body:q[2]} } });
+      out.grammar.push({id:'g'+hash(f[0]+f[2]), level:f[0], cat:f[1], title:f[2], ex:f[3].split(',').map(Number).filter(Boolean), sum:f[4], body:f[5], tr});
+      return;
+    }
     if(!slang){
       const n=Number(f[0]), info=IDX_INFO[n-1]; if(!info) return;
       const t=f[1], plain=t.replace(/[\[\]]/g,'');
@@ -545,13 +579,13 @@ function parseLang(raw, code){
   });
   return out;
 }
-const CHUNKS = {}, TEXTS = {}, BY_ID = {};
+const CHUNKS = {}, TEXTS = {}, BY_ID = {}, GRAM = {}, NMAP = {};
 function registerLang(code, raw){
-  const list=parseLang(raw,code); CHUNKS[code]=list; delete PATHS[code];
-  const byN={}; list.forEach(c=>{ BY_ID[c.id]=c; if(c.n) byN[c.n]=c.plain }); TEXTS[code]=byN;
+  const list=parseLang(raw,code); CHUNKS[code]=list; delete PATHS[code]; GRAM[code]=list.grammar||[];
+  const byN={}, byNc={}; list.forEach(c=>{ BY_ID[c.id]=c; if(c.n){ byN[c.n]=c.plain; byNc[c.n]=c } }); TEXTS[code]=byN; NMAP[code]=byNc;
 }
 /* ---------- downloads: each language is its own file, stored on the device ---------- */
-const LANG_CACHE='fluently-lang-v1', LANG_VERSION={"de": "adf7d27c", "en": "62e35faf", "es": "55e976c0", "es419": "6776ebc1", "fr": "4b9ced72", "it": "d37aaf4d", "nl": "2af4e242", "sv": "5d6edf3c", "no": "34ce09df", "pt": "ca296dfa", "da": "30c29d5b", "ro": "8a7df44f", "pl": "8fa6f56e", "cs": "996f928f", "hr": "38ad385c", "fi": "4d104cea", "tr": "fbc82983", "sw": "c2d79e3e"}; /* per-language file version: only changed languages re-download */
+const LANG_CACHE='fluently-lang-v1', LANG_VERSION={"de": "1f1859f8", "en": "62e35faf", "es": "55e976c0", "es419": "6776ebc1", "fr": "4b9ced72", "it": "d37aaf4d", "nl": "2af4e242", "sv": "5d6edf3c", "no": "34ce09df", "pt": "ca296dfa", "da": "30c29d5b", "ro": "8a7df44f", "pl": "8fa6f56e", "cs": "996f928f", "hr": "38ad385c", "fi": "4d104cea", "tr": "fbc82983", "sw": "c2d79e3e"}; /* per-language file version: only changed languages re-download */
 const langUrl = code => `lang/${code}.txt?v=${LANG_VERSION[code]||0}`;
 const LOADING = {};
 const VOICE_CACHE='fluently-models-1'; /* voice model files, saved by sw.js; kept until the language is removed */
@@ -583,12 +617,13 @@ async function removeLang(code){
   try{ if(window.caches){ const vc=await caches.open(VOICE_CACHE); const ks=await vc.keys(); const ids=(PIPER_VOICES[code]||[]).map(([v])=>v.split('#')[0]); await Promise.all(ks.filter(k=>ids.some(v=>decodeURIComponent(k.url).includes(v))).map(k=>vc.delete(k))) } }catch(e){}
   if(PIPER_VOICES[code] && PIPER.voice && PIPER_VOICES[code].some(([v])=>v===PIPER.voice)){ PIPER.session=null; PIPER.voice=null }
   if(state.langsDl) delete state.langsDl[code];
-  if(code!==state.lang){ const list=CHUNKS[code]||[]; list.forEach(c=>delete BY_ID[c.id]); delete CHUNKS[code]; delete TEXTS[code]; delete PATHS[code] }
+  if(code!==state.lang){ const list=CHUNKS[code]||[]; list.forEach(c=>delete BY_ID[c.id]); delete CHUNKS[code]; delete TEXTS[code]; delete PATHS[code]; delete GRAM[code]; delete NMAP[code] }
   saveLocal();
 }
 const isDownloaded = code => !!(state.langsDl && state.langsDl[code]) || !!CHUNKS[code];
-const LANG_SIZE_MB = {"de": 0.7, "en": 0.8, "es": 0.8, "es419": 0.9, "fr": 0.8, "it": 0.8, "nl": 0.8, "sv": 0.7, "no": 0.7, "pt": 0.9, "da": 0.7, "ro": 0.7, "pl": 0.7, "cs": 0.7, "hr": 0.8, "fi": 0.7, "tr": 0.8, "sw": 0.8};
+const LANG_SIZE_MB = {"de": 1.2, "en": 0.8, "es": 0.8, "es419": 0.9, "fr": 0.8, "it": 0.8, "nl": 0.8, "sv": 0.7, "no": 0.7, "pt": 0.9, "da": 0.7, "ro": 0.7, "pl": 0.7, "cs": 0.7, "hr": 0.8, "fi": 0.7, "tr": 0.8, "sw": 0.8};
 LANGS.forEach(l=>l.ready=!!LANG_SIZE_MB[l.code]);
+const LANG_GRAMMAR = {"de": 385}; /* languages that have a grammar course: {code: number of rules} */
 const LANG_PROGRESS = {}; /* languages being translated right now */
 /* ---------- translations in the learner's own language ---------- */
 function baseLang(){
@@ -1047,7 +1082,7 @@ function chooseView(){
   return `<div class="choose"><div class="alogo sm">${LOGO_SVG}</div><h1>What do you want to learn?</h1>
     <p class="muted">Pick a language to get started. You can add or switch languages any time.</p>
     <div class="field" style="margin:18px 0 6px"><span class="fl">I speak</span><div class="select"><select data-set="base" aria-label="I speak">${BASES.filter(([c])=>LANG_SIZE_MB[c]||c==='en').map(([c,n])=>opt(c,s.base||'en',n)).join('')}</select>${ic('down',18)}</div></div>
-    <div class="card" style="padding:8px;margin-top:14px"><div id="langlist">${langRows(true)}</div></div></div>`;
+    <div class="card" style="padding:8px;margin-top:14px"><div id="binfo" style="padding:4px 4px 0">${badgeLegend()}</div><div id="langlist">${langRows(true)}</div></div></div>`;
 }
 function loadingView(){
   const L=curLang(), e=LOADUI.err;
@@ -1101,7 +1136,45 @@ function setInfo(key){
   if(t==='cat'){ const c=catOf(a), parts=topicParts(a), n=Number(b)||0;
     if(!n) return {title:c.name, sub:c.desc, items:parts.flat(), icon:catSq(c,'lg'), showLevel:true};
     return {title:`${c.name} · Part ${n}`, sub:`${c.desc} Part ${n} of ${parts.length}.`, items:parts[n-1]||[], icon:catSq(c,'lg'), showLevel:true} }
+  if(t==='gr'){ const r=gramRule(a); if(r){ const T=gramTr(r); return {title:T.title, sub:T.sum, items:gramItems(r), icon:`<span class="sq lg" style="--c:${gcatOf(r.cat).color}">${ic('book',24)}</span>`, showLevel:true} } }
   return {title:'Favorites', sub:'Chunks you marked with a heart', items:favItems(), icon:`<span class="sq lg" style="--c:#ef4444">${ic('heart',24)}</span>`, showLevel:true};
+}
+
+/* =====================================================================
+   GRAMMAR (levels -> categories -> rules -> example sentences)
+   ===================================================================== */
+const GCATS = [
+  {id:'cases',name:'Cases',icon:'layers',color:'#2563eb'},{id:'tenses',name:'Tenses',icon:'clock',color:'#4338ca'},
+  {id:'order',name:'Word order',icon:'grid',color:'#0891b2'},{id:'verbs',name:'Verbs',icon:'bolt',color:'#ea580c'},
+  {id:'modal',name:'Modal verbs',icon:'case',color:'#0369a1'},{id:'articles',name:'Articles & gender',icon:'book',color:'#7c3aed'},
+  {id:'nouns',name:'Nouns & plurals',icon:'house',color:'#0d9488'},{id:'pronouns',name:'Pronouns',icon:'people',color:'#db2777'},
+  {id:'adjectives',name:'Adjectives & comparison',icon:'smile',color:'#ca8a04'},{id:'preps',name:'Prepositions',icon:'plane',color:'#16a34a'},
+  {id:'conj',name:'Conjunctions & clauses',icon:'chat',color:'#c026d3'},{id:'neg',name:'Negation & questions',icon:'cross',color:'#dc2626'},
+  {id:'mood',name:'Passive & subjunctive',icon:'trophy',color:'#9333ea'},{id:'numbers',name:'Numbers, time & dates',icon:'clock',color:'#0ea5e9'},
+  {id:'particles',name:'Particles & fillers',icon:'chat',color:'#e11d48'},{id:'punct',name:'Punctuation & spelling',icon:'book',color:'#64748b'},
+  {id:'style',name:'Style & register',icon:'bag',color:'#b45309'}
+];
+const gcatOf = id => GCATS.find(c=>c.id===id) || {id,name:id,icon:'book',color:'#64748b'};
+const gramList = () => GRAM[state.lang] || [];
+const gramRule = id => gramList().find(r=>r.id===id);
+const gramTr = r => { const b=baseLang(), t=r.tr&&(r.tr[b]||(b==='es419'&&r.tr.es)); return t?{title:t.title,sum:t.sum,body:t.body}:{title:r.title,sum:r.sum,body:r.body} };
+const gramItems = r => { const m=NMAP[state.lang]||{}; return r.ex.map(n=>m[n]).filter(Boolean) };
+const gramPct = rs => { const seen=new Set(), all=[]; rs.forEach(r=>gramItems(r).forEach(c=>{ if(!seen.has(c.id)){ seen.add(c.id); all.push(c) } })); return pct(all) };
+const gramIn = (lv,cat) => gramList().filter(r=>r.level===lv && (!cat||r.cat===cat));
+const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+function gramBody(body){
+  const out=[]; let ul=null;
+  body.split('¶').forEach(par=>{
+    par=par.trim(); if(!par) return;
+    if(par.startsWith('• ')){ (ul=ul||[]).push(par.slice(2)); return }
+    if(ul){ out.push('<ul>'+ul.map(x=>`<li>${inl(x)}</li>`).join('')+'</ul>'); ul=null }
+    if(par.startsWith('T:')){
+      const rows=par.slice(2).split('//').map(r=>r.split('¦'));
+      out.push('<div class="tw"><table><thead><tr>'+rows[0].map(c=>`<th>${inl(c)}</th>`).join('')+'</tr></thead><tbody>'+rows.slice(1).map(r=>'<tr>'+r.map(c=>`<td>${inl(c)}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>');
+    } else out.push(`<p>${inl(par)}</p>`);
+  });
+  if(ul) out.push('<ul>'+ul.map(x=>`<li>${inl(x)}</li>`).join('')+'</ul>');
+  return out.join('');
 }
 
 function chunkCard(c,opts={}){
@@ -1171,6 +1244,7 @@ const VIEWS = {
       <button class="ex wide tone-green" data-act="learn-cat"><span class="sq">${ic('grid',24)}</span><div><b>Topics &amp; Slang</b><br><span>${TOPICS.length} topics · ${TOPICS.reduce((a,c)=>a+topicParts(c.id).flat().length,0).toLocaleString()} chunks</span></div>${ic('chev',18)}</button>
       <button class="ex tone-red" data-act="go" data-tab="favs"><span class="sq">${ic('heart',22)}</span><b>Favorites</b><span>${favItems().length} saved</span></button>
       <button class="ex tone-yellow" data-act="mix"><span class="sq">${ic('shuffle',22)}</span><b>Random 15</b><span>A quick shuffle</span></button>
+      ${gramList().length?`<button class="ex wide tone-purple" data-act="gram"><span class="sq">${ic('book',24)}</span><div><b>Grammar</b><br><span>${gramList().length.toLocaleString()} rules · A1 to C1, with example sentences</span></div>${ic('chev',18)}</button>`:''}
     </div>`;
   },
 
@@ -1193,6 +1267,44 @@ const VIEWS = {
     <div class="card"><div class="summary">${catSq(c,'lg')}<div class="t"><p>${esc(c.desc)}</p><div class="bar" style="margin-top:10px"><i style="width:${p}%"></i></div></div></div></div>
     <div class="label">${parts.length} parts</div>
     ${parts.map((pt,i)=>{ const q=pct(pt); return `<button class="lrow" data-act="open" data-key="cat:${c.id}:${i+1}"><span class="sq" style="--c:${c.color}">${i+1}</span><div class="b"><b>Part ${i+1}</b><span>${pt.length} chunks · ${learned(pt)} learned</span><div class="bar"><i style="width:${q}%;background:${c.color}"></i></div></div>${ic('chev',18).replace('<svg','<svg class="chev"')}</button>` }).join('')}`;
+  },
+
+  gram(){
+    const L=curLang(), all=gramList();
+    return `
+    <div class="subhead"><button class="iconbtn" data-act="back" aria-label="Back">${ic('back')}</button><div class="t"><h1>Grammar</h1><p>${all.length.toLocaleString()} ${(L.short||L.name)} rules</p></div>${flag(state.lang,28)}</div>
+    <div class="card"><div class="summary"><span class="sq lg" style="--c:#a855f7">${ic('book',24)}</span><div class="t"><p>Pick a level, then a topic. Every rule has a short explanation and a button that opens real example sentences you can listen to.</p></div></div></div>
+    <div class="label">Levels</div>
+    ${LEVELS.map(Lv=>{ const rs=gramIn(Lv.id), cats=new Set(rs.map(r=>r.cat)).size, q=gramPct(rs);
+      return `<button class="lrow" data-act="glevel" data-lv="${Lv.id}" ${rs.length?'':'disabled style="opacity:.5"'}>${lvSq(Lv.id)}<div class="b"><b>${Lv.id} Grammar · ${Lv.name}</b><span>${rs.length} rule${rs.length===1?'':'s'} · ${cats} topic${cats===1?'':'s'}</span><div class="bar"><i style="width:${q}%;background:${Lv.color}"></i></div></div>${ic('chev',18).replace('<svg','<svg class="chev"')}</button>` }).join('')}`;
+  },
+  gcat(v){
+    const Lv=LEVELS.find(x=>x.id===v.lv), rs=gramIn(v.lv), cats=GCATS.filter(c=>rs.some(r=>r.cat===c.id));
+    return `
+    <div class="subhead"><button class="iconbtn" data-act="back" aria-label="Back">${ic('back')}</button><div class="t"><h1>${v.lv} Grammar</h1><p>${rs.length} rules · ${cats.length} topics</p></div>${flag(state.lang,28)}</div>
+    <div class="card"><div class="summary">${lvSq(v.lv,'lg')}<div class="t"><p>${esc(Lv.desc)}</p></div></div></div>
+    <div class="label">${cats.length} topics</div>
+    ${cats.map(c=>{ const rr=gramIn(v.lv,c.id), q=gramPct(rr);
+      return `<button class="lrow" data-act="gtopic" data-lv="${v.lv}" data-c="${c.id}"><span class="sq" style="--c:${c.color}">${ic(c.icon,24)}</span><div class="b"><b>${esc(c.name)}</b><span>${rr.length} rule${rr.length===1?'':'s'}</span><div class="bar"><i style="width:${q}%;background:${c.color}"></i></div></div>${ic('chev',18).replace('<svg','<svg class="chev"')}</button>` }).join('')}`;
+  },
+  grules(v){
+    const c=gcatOf(v.c), rs=gramIn(v.lv,v.c);
+    return `
+    <div class="subhead"><button class="iconbtn" data-act="back" aria-label="Back">${ic('back')}</button><div class="t"><h1>${esc(c.name)}</h1><p>${v.lv} · ${rs.length} rule${rs.length===1?'':'s'}</p></div>${flag(state.lang,28)}</div>
+    ${rs.map((r,i)=>{ const T=gramTr(r), q=pct(gramItems(r));
+      return `<button class="lrow grl" data-act="grule" data-id="${r.id}"><span class="sq" style="--c:${c.color}">${i+1}</span><div class="b"><b>${esc(T.title)}</b><span>${esc(T.sum)}</span><div class="bar"><i style="width:${q}%;background:${c.color}"></i></div></div>${ic('chev',18).replace('<svg','<svg class="chev"')}</button>` }).join('')}`;
+  },
+  grule(v){
+    const r=gramRule(v.id); if(!r) return `<div class="subhead"><button class="iconbtn" data-act="back">${ic('back')}</button><div class="t"><h1>Grammar</h1></div></div>`;
+    const T=gramTr(r), c=gcatOf(r.cat), sib=gramIn(r.level,r.cat), i=sib.indexOf(r), n=gramItems(r).length;
+    return `
+    <div class="subhead"><button class="iconbtn" data-act="back" aria-label="Back">${ic('back')}</button><div class="t"><h1>${esc(T.title)}</h1><p>${r.level} · ${esc(c.name)} · ${i+1} of ${sib.length}</p></div>${flag(state.lang,28)}</div>
+    <div class="card">
+      <div class="gsum">${inl(T.sum)}</div>
+      <div class="gbody">${gramBody(T.body)}</div>
+    </div>
+    <div class="row-btns" style="margin-top:14px"><button class="btn primary" data-act="open" data-key="gr:${r.id}" ${n?'':'disabled'}>${ic('headphones',19)} See it in use (${n})</button></div>
+    <div class="gnav">${i>0?`<button class="btn soft sm" data-act="gnav" data-id="${sib[i-1].id}">${ic('back',18)} Previous</button>`:'<span style="flex:1"></span>'}${i<sib.length-1?`<button class="btn soft sm" data-act="gnav" data-id="${sib[i+1].id}">Next ${ic('chev',18)}</button>`:'<span style="flex:1"></span>'}</div>`;
   },
 
   set(v){
@@ -1448,11 +1560,19 @@ async function autoLoop(){
 /* =====================================================================
    SHEET & TOAST
    ===================================================================== */
+function badgeLegend(code){
+  const l=code&&LANGS.find(x=>x.code===code), ic1=`<span class="lb">${ic('headphones',14)}</span>`, ic2=`<span class="lb g">${ic('book',14)}</span>`;
+  if(!l) return `<div class="binfo"><div class="bi">${ic1}<span><b>Complete audio library.</b> Every sentence in the course can be played aloud.</span></div><div class="bi">${ic2}<span><b>Grammar course.</b> Rules from A1 to C1 with example sentences.</span></div><div class="bi"><span class="muted small">Tap a symbol next to a language to see what it includes.</span></div></div>`;
+  const g=LANG_GRAMMAR[l.code];
+  return `<div class="binfo"><div class="bi"><b>${esc(l.name)}</b></div>
+    <div class="bi">${ic1}<span>${l.ready?`<b>Complete audio library.</b> Every sentence and slang line can be played aloud with a natural voice.`:'<b>Audio library:</b> coming soon.'}</span></div>
+    <div class="bi ${g?'':'no'}">${ic2}<span>${g?`<b>Grammar course.</b> ${g.toLocaleString()} rules from A1 to C1, each with example sentences you can listen to.`:'<b>Grammar course:</b> not available yet. Coming soon.'}</span></div></div>`;
+}
 function langRows(readyFirst){
   const byName=(a,b)=>readyFirst&&(!!a.ready!==!!b.ready)?(a.ready?-1:1):a.name.localeCompare(b.name), row=l=>{
     const on=l.code===state.lang, dl=isDownloaded(l.code);
     const right = !l.ready ? (LANG_PROGRESS[l.code] ? '<span class="soon prog">In progress</span>' : '<span class="soon">Coming soon</span>') : on ? ic('check') : dl ? '<span class="rt ok">Downloaded</span>' : `<span class="rt">${ic('dl',16)} ${LANG_SIZE_MB[l.code]} MB</span>`;
-    return `<div class="langline"><button class="langrow ${on?'on':''}" data-act="pickLang" data-code="${l.code}">${flag(l.code,32)}<div class="b"><b>${l.name}</b><span>${l.native}</span></div>${right}</button>${l.ready&&dl&&!on?`<button class="iconbtn rm" data-act="removeLang" data-code="${l.code}" aria-label="Remove ${l.name}">${ic('trash',18)}</button>`:''}</div>`;
+    return `<div class="langline"><button class="langrow ${on?'on':''}" data-act="pickLang" data-code="${l.code}">${flag(l.code,32)}<div class="b"><b>${l.name}${l.ready?`<span class="lb" data-act="lbadge" data-code="${l.code}" data-k="audio" role="button" aria-label="Audio library">${ic('headphones',14)}</span>`:''}${LANG_GRAMMAR[l.code]?`<span class="lb g" data-act="lbadge" data-code="${l.code}" data-k="grammar" role="button" aria-label="Grammar course">${ic('book',14)}</span>`:''}</b><span>${l.native}</span></div>${right}</button>${l.ready&&dl&&!on?`<button class="iconbtn rm" data-act="removeLang" data-code="${l.code}" aria-label="Remove ${l.name}">${ic('trash',18)}</button>`:''}</div>`;
   };
   if(!readyFirst && state.langSort==='family') return FAMILIES.map(f=>`<div class="fam">${f}</div>`+LANGS.filter(l=>l.family===f).sort(byName).map(row).join('')).join('');
   return LANGS.slice().sort(byName).map(row).join('');
@@ -1460,6 +1580,7 @@ function langRows(readyFirst){
 function openLang(){
   $('#sheet').innerHTML=`<div class="sbg" data-act="closeSheet"></div><div class="spanel" role="dialog" aria-label="Choose a language"><div class="grab"></div><h3>Choose a language</h3><p class="muted small" style="margin:-4px 0 12px">Each language downloads once and then works offline. Its voice downloads the first time you press play.</p>
     <div class="seg" style="margin:0 0 10px"><button class="${state.langSort!=='family'?'on':''}" data-act="langSort" data-s="az">A–Z</button><button class="${state.langSort==='family'?'on':''}" data-act="langSort" data-s="family">By family</button></div>
+    <div id="binfo">${badgeLegend()}</div>
     <div id="langlist">${langRows()}</div></div>`;
   requestAnimationFrame(()=>$('#sheet').classList.add('open'));
 }
@@ -1505,6 +1626,12 @@ const ACT = {
   go: el=>go(el.dataset.tab), back, lang:openLang, closeSheet,
   theme: ()=>setTheme(isDark()?'light':'dark'),
   themeSet: el=>setTheme(el.dataset.t),
+  lbadge: el=>{ const b=document.getElementById('binfo'); if(b){ b.innerHTML=badgeLegend(el.dataset.code); } },
+  gram: ()=>push({view:'gram'}),
+  glevel: el=>push({view:'gcat',lv:el.dataset.lv}),
+  gtopic: el=>push({view:'grules',lv:el.dataset.lv,c:el.dataset.c}),
+  grule: el=>push({view:'grule',id:el.dataset.id}),
+  gnav: el=>{ nav.stack[nav.stack.length-1]={view:'grule',id:el.dataset.id}; render(); window.scrollTo(0,0) },
   wkMove: el=>moveWeek(Number(el.dataset.d)),
   openMonth: ()=>{ if(Date.now()-SWIPED<400) return; openMonth() },
   mMove: el=>moveMonth(Number(el.dataset.d)),
@@ -1927,7 +2054,7 @@ document.addEventListener('change', async e=>{
 
 /* ---------- offline: service worker + persistent storage ---------- */
 /* make sure an old saved copy of the app never sticks around */
-const BUILD='2914461b5f';
+const BUILD='b4a1bdea5a';
 async function checkForUpdate(){
   if(!/^https?:$/.test(location.protocol)) return;
   try{
